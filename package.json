@@ -1,0 +1,58 @@
+{
+  "name": "gulp-webpack-multi-entry",
+  "version": "1.0.0",
+  "description": "基于gulp的webpack多入口文件",
+  "keyword": "javascript, nodejs, gulp, webpack",
+  "author": {
+    "name": "Rodey Luo",
+    "email": "rodeyluo@gmail.com"
+  },
+  "main": "index.js",
+  "scripts": {
+    "main": "index.js"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RodeyManager/gulp-webpack-multi-entry.git"
+  },
+  "homepage": "https://github.com/RodeyManager/gulp-webpack-multi-entry.git#readme",
+  "files": [
+    "bin",
+    "lib"
+  ],
+  "dependencies": {
+    "extend": "^3.0.1",
+    "gulp-util": "^3.0.8",
+    "lodash.clone": "^4.5.0",
+    "lodash.some": "^4.6.0",
+    "memory-fs": "^0.4.1",
+    "through2": "^2.0.3",
+    "vinyl": "^2.1.0",
+    "webpack": "^3.7.1"
+  },
+  "engines": {
+    "nodejs": "4.4.2+",
+    "npm": "4.2.0+"
+  },
+  "_npmUser": {
+    "name": "rodey",
+    "email": "rodeyluo@gmail.com"
+  },
+  "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-loader": "^7.1.2",
+    "babel-plugin-add-module-exports": "^0.2.1",
+    "babel-plugin-transform-es2015-modules-commonjs": "^6.26.0",
+    "babel-plugin-transform-export-extensions": "^6.22.0",
+    "babel-plugin-transform-runtime": "^6.23.0",
+    "babel-preset-env": "^1.6.1",
+    "babel-preset-es2015": "^6.24.1",
+    "babel-preset-react": "^6.24.1",
+    "babel-preset-stage-1": "^6.24.1",
+    "babel-runtime": "^6.26.0",
+    "gulp": "^3.9.1",
+    "moment": "^2.19.1",
+    "uglifyjs-webpack-plugin": "^1.0.0-beta.3"
+  }
+}
