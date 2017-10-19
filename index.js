@@ -6,7 +6,8 @@
 
 const gutil            = require('gulp-util');
 const nodePath         = require('path');
-const fs               = require('fs');
+const nodeFS           = require('fs');
+const mkdirp           = require('mkdirp');
 const File             = require('vinyl');
 const extend           = require('extend');
 const MemoryFileSystem = require('memory-fs');
@@ -35,52 +36,48 @@ const PluginError = gutil.PluginError;
 const PLUGIN_NAME = 'gulp-webpack-multi-entry';
 
 module.exports = function(options, wp, done){
-    options    = clone(options) || {};
-    let { progress } = options;
+    options      = clone(options) || {};
+    let progress = options.progress;
     delete options.progress;
 
-    let config = options.config || options;
+    let config      = options.config || options;
+    let callingDone = false;
 
-    if(typeof done !== 'function'){
-        let callingDone = false;
-        done            = function(err, stats){
-            if(err){
-                // The err is here just to match the API but isnt used
-                return;
-            }
-            stats = stats || {};
-            if(options.quiet || callingDone){
-                return;
-            }
-
-            // Debounce output a little for when in watch mode
-            if(options.watch){
-                callingDone = true;
-                setTimeout(function(){
-                    callingDone = false;
-                }, 500);
-            }
-
-            if(options.verbose){
-                gutil.log(stats.toString({
-                    colors: gutil.colors.supportsColor
-                }));
-            }else{
-                let statsOptions = (options && options.stats) || {};
-
-                Object.keys(defaultStatsOptions).forEach(function(key){
-                    if(typeof statsOptions[key] === 'undefined'){
-                        statsOptions[key] = defaultStatsOptions[key];
-                    }
-                });
-
-                gutil.log(stats.toString(statsOptions));
-            }
-        };
-    }
+    done = typeof done === 'function' ? done : doneCallback;
 
     let webpack = wp || require('webpack');
     let cfs     = [];
+
+    function doneCallback(err, stats){
+        if(err) return;
+        stats = stats || {};
+        if(options.quiet || callingDone){
+            return;
+        }
+
+        if(options.watch){
+            callingDone = true;
+            setTimeout(function(){
+                callingDone = false;
+            }, 500);
+        }
+
+        if(options.verbose){
+            gutil.log(stats.toString({
+                colors: gutil.colors.supportsColor
+            }));
+        }else{
+            let statsOptions = (options && options.stats) || {};
+
+            Object.keys(defaultStatsOptions).forEach(function(key){
+                if(typeof statsOptions[key] === 'undefined'){
+                    statsOptions[key] = defaultStatsOptions[key];
+                }
+            });
+
+            gutil.log(stats.toString(statsOptions));
+        }
+    }
 
     function pipeBuffer(file, enc, next){
         if(file.isStream()){
@@ -96,143 +93,149 @@ module.exports = function(options, wp, done){
             let basePath   = nodePath.resolve(cwd, config.output.path);
             cf.entry       = file.path;
             cf.output.path = nodePath.dirname(nodePath.resolve(basePath, file.relative));
-            cfs.push(cf);
+            return compilerStream.apply(this, [file, enc, next, cf]);
         }
 
         next();
     };
 
-    function endStream(cb){
-        cfs = cfs.filter(cf => cf.entry);
+    function compilerStream(file, enc, next, config){
+        let self = this;
 
-        let self         = this;
-        let handleConfig = (config) => {
-            config.output          = config.output || {};
-            config.watch           = !!options.watch;
-            config.output.path     = config.output.path || process.cwd();
-            config.output.filename = getFileName(config);
-            config.watch           = options.watch;
-            return true;
-        };
+        config.output          = config.output || {};
+        config.watch           = !!options.watch;
+        config.output.path     = config.output.path || process.cwd();
+        config.output.filename = getFileName(config);
 
-        let succeeded;
-        for(let i = 0; i < cfs.length; i++){
-            succeeded = handleConfig(cfs[i]);
-            if(!succeeded){
-                return false;
-            }
+        // 创建实例 webpack compiler
+        let wpc = webpack(config);
+        running.apply(this, [wpc, file, config]);
+
+        if(options.watch && wpc.compiler){
+            wpc = wpc.compiler;
         }
+        // 是否显示编译进度
+        progress && showProgress(wpc);
+        // 编译阶段
+        return handleCompiler.apply(this, [wpc, file, config, next]);
 
-        let compiler = webpack(cfs);
-        compiler.run((err, stats) => {
+    }
+
+    function running(wpc, file){
+        wpc.run((err, stats) =>{
             if(err){
                 this.emit('error', new gutil.PluginError('webpack-stream', err));
                 return;
             }
 
-            if (err) {
+            if(err){
                 this.emit('error', new gutil.PluginError('webpack-stream', err));
                 return;
             }
             let jsonStats = stats ? stats.toJson() || {} : {};
-            let errors = jsonStats.errors || [];
-            if (errors.length) {
-                let errorMessage = errors.reduce(function (resultMessage, nextError) {
+            let errors    = jsonStats.errors || [];
+            if(errors.length){
+                let errorMessage     = errors.reduce(function(resultMessage, nextError){
                     resultMessage += nextError.toString();
                     return resultMessage;
                 }, '');
                 let compilationError = new gutil.PluginError('webpack-stream', errorMessage);
-                if (!options.watch) {
+                if(!options.watch){
                     self.emit('error', compilationError);
                 }
                 this.emit('compilation-error', compilationError);
             }
 
-            done(err, stats);
+            done(err, stats, wpc, file, options);
 
         });
-
-        if (options.watch && compiler.compiler) {
-            compiler = compiler.compiler;
-        }
-
-        if (progress) {
-            compiler.apply(new ProgressPlugin(function (percentage, msg) {
-                percentage = Math.floor(percentage * 100);
-                msg = percentage + '% ' + msg;
-                if (percentage < 10) msg = ' ' + msg;
-                gutil.log('webpack', msg);
-            }));
-        }
-
-        // let handleCompiler = function(compiler){
-        //
-        //     let fs = compiler.outputFileSystem = new MemoryFileSystem();
-        //
-        //     compiler.plugin('after-emit', (compilation, callback) => {
-        //         Object.keys(compilation.assets).forEach(outname => {
-        //             if(compilation.assets[outname].emitted){
-        //                 let file = prepareFile(fs, compiler, outname);
-        //                 self.push(file);
-        //             }
-        //         });
-        //         callback();
-        //     });
-        // };
-        //
-        // if(Array.isArray(cfs) && options.watch){
-        //     compiler.watchings.forEach(compiler => {
-        //         handleCompiler(compiler);
-        //     });
-        // }else if(Array.isArray(cfs)){
-        //     compiler.compilers.forEach(compiler => {
-        //         handleCompiler(compiler);
-        //     });
-        // }else{}
-
-    };
-
-    let stream = through2.obj(pipeBuffer, endStream);
-
-    // If entry point manually specified, trigger that
-    let hasEntry = Array.isArray(cfs)
-        ? some(cfs, c => {
-            return c.entry;
-        })
-        : cfs.entry;
-    if(hasEntry){
-        stream.end();
     }
 
-    return stream;
+    function showProgress(wpc){
+        wpc.apply(new ProgressPlugin(function(percentage, msg){
+            percentage = Math.floor(percentage * 100);
+            msg        = percentage + '% ' + msg;
+            if(percentage < 10) msg = ' ' + msg;
+            gutil.log('webpack', msg);
+        }));
+    }
+
+    function handleCompiler(wpc, file, config, next){
+
+        // 设置内存操作FileSystem
+        let fs = wpc.outputFileSystem = new MemoryFileSystem();
+
+        // 编译完成后读取数据
+        wpc.plugin('after-emit', (compilation, callback) =>{
+
+            Object.keys(compilation.assets).forEach(outname =>{
+                if(compilation.assets[outname].emitted){
+                    if(!/\.map$|\.source$|\.source-map$/.test(outname)){
+                        file = recombineFile(file, fs, wpc, outname);
+                        this.push(file);
+                        next();
+                    }else{
+                        // file = recombineNewFile(file, fs, wpc, outname);
+                        let existsAt = compilation.assets[outname].existsAt;
+                        let existsAtPath = nodePath.dirname(existsAt);
+                        if(!nodeFS.existsSync(existsAtPath)){
+                            mkdirp.sync(existsAtPath);
+                        }
+                        nodeFS.writeFileSync(existsAt, compilation.assets[outname]._value, 'utf8');
+                    }
+                }
+            });
+            callback();
+        });
+
+    }
+
+    function getFileName(config){
+
+        let fileInfo = nodePath.parse(config.entry);
+        let filename = config.output.filename;
+        if(!filename){
+            return fileInfo.base;
+        }
+        return filename = filename.replace(/([\s\S]*?)(\[[name]*?[:\d]?\])([\s\S]*?)/g, "$1" + fileInfo.name + "$3");
+    }
+
+    function recombineFile(file, fs, wpc, outname){
+
+        let fileInfo = nodePath.parse(file.path);
+        let path     = fs.join(wpc.outputPath, outname);
+        if(path.indexOf('?') !== -1){
+            path = path.split('?')[0];
+        }
+        // 内存中读取数据
+        file.contents = fs.readFileSync(path);
+        fileInfo.base = outname;
+        fileInfo.name = outname.replace('.' + fileInfo.ext, '');
+        file.path     = nodePath.format(fileInfo);
+
+        return file;
+    }
+
+    function recombineNewFile(file, fs, wpc, outname){
+
+        let fileInfo = nodePath.parse(file.path);
+        let path     = fs.join(wpc.outputPath, outname);
+        if(path.indexOf('?') !== -1){
+            path = path.split('?')[0];
+        }
+        fileInfo.base = outname;
+        fileInfo.name = outname.replace('.' + fileInfo.ext, '');
+
+        return new File({
+            base: file.base,
+            path: nodePath.format(fileInfo),
+            contents: fs.readFileSync(path)
+        });
+    }
+
+    return through2.obj(pipeBuffer);
 
 };
-
-function getFileName(config){
-
-    let fileInfo = nodePath.parse(config.entry);
-    let filename = config.output.filename;
-    if(!filename){
-        return fileInfo.base;
-    }
-    return filename = filename.replace(/([\s\S]*?)(\[[name]*?\])([\s\S]*?)/g, "$1" + fileInfo.name + "$3");
-}
-
-function prepareFile(fs, compiler, outname){
-    let path = fs.join(compiler.outputPath, outname);
-    if(path.indexOf('?') !== -1){
-        path = path.split('?')[0];
-    }
-
-    let contents = fs.readFileSync(path);
-
-    let file = new File({
-        base: compiler.outputPath,
-        path: nodePath.join(compiler.outputPath, outname),
-        contents: contents
-    });
-    return file;
-}
 
 // Expose webpack if asked
 Object.defineProperty(module.exports, 'webpack', {
