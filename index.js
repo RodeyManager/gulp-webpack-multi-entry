@@ -12,60 +12,57 @@ const extend           = require('extend');
 const MemoryFileSystem = require('memory-fs');
 const through2         = require('through2');
 const ProgressPlugin   = require('webpack/lib/ProgressPlugin');
-const clone            = require('lodash.clone');
-const some             = require('lodash.some');
 
-let defaultStatsOptions = {
+const defaultStatsOpts = {
     colors: gutil.colors.supportsColor,
     hash: false,
     timings: false,
     chunks: false,
     chunkModules: false,
     modules: false,
-    children: true,
-    version: false,
-    cached: false,
-    cachedAssets: false,
-    reasons: false,
     source: false,
-    errorDetails: false
+    cached: false,
+    cachedAssets: false
 };
 
 const PluginError = gutil.PluginError;
 const PLUGIN_NAME = 'gulp-webpack-multi-entry';
 
+/**
+ * webpack + gulp multi entries build
+ * @param options   see https://webpack.js.org/configuration/
+ * @param wp        webpack
+ * @param done
+ * @returns {*}
+ */
 module.exports = function(options, wp, done){
-    options      = clone(options) || {};
+
+    options      = extend(true, {}, options) || {};
     let progress = options.progress;
     delete options.progress;
 
     let config = options.config || options;
-    let statsOptions = (options && options.stats) || {};
+    let statsOpts = (options && options.stats) || {};
     let webpack = wp || require('webpack');
 
-    done = typeof done === 'function' ? done : doneCallback;
+    done = (typeof done === 'function') ? done : doneCallback;
 
     function doneCallback(err, stats){
-        if(err) return;
-        stats = stats || {};
-        if(!statsOptions){
-            return;
-        }
-        if('string' === typeof statsOptions){
+        if(err || !statsOpts) return;
 
-            return 'none' !== statsOptions && gutil.log(stats.toString());
-        }
-        if(statsOptions.verbose){
+        stats = stats || {};
+        if('string' === typeof statsOpts)
+            return 'none' !== statsOpts && gutil.log(stats.toString());
+
+        if(statsOpts.verbose){
             gutil.log(stats.toString({
                 colors: gutil.colors.supportsColor
             }));
         }else{
-            Object.keys(defaultStatsOptions).forEach(key =>{
-                if(typeof statsOptions[key] === 'undefined'){
-                    statsOptions[key] = defaultStatsOptions[key];
-                }
+            Object.keys(defaultStatsOpts).forEach(key =>{
+                (typeof statsOpts[key] === 'undefined') && (statsOpts[key] = defaultStatsOpts[key]);
             });
-            gutil.log(stats.toString(statsOptions));
+            gutil.log(stats.toString(statsOpts));
         }
     }
 
@@ -83,13 +80,13 @@ module.exports = function(options, wp, done){
             let basePath   = nodePath.resolve(cwd, config.output.path);
             cf.entry       = file.path;
             cf.output.path = nodePath.dirname(nodePath.resolve(basePath, file.relative));
-            return compilerStream.apply(this, [file, enc, next, cf]);
+            return compilerStream.apply(this, [file, next, cf]);
         }
 
         next();
     };
 
-    function compilerStream(file, enc, next, config){
+    function compilerStream(file, next, config){
         let self = this;
 
         config.output          = config.output || {};
@@ -126,7 +123,7 @@ module.exports = function(options, wp, done){
                 }, '');
                 let compilationError = new gutil.PluginError('webpack-stream', errorMessage);
                 if(!options.watch){
-                    self.emit('error', compilationError);
+                    this.emit('error', compilationError);
                 }
                 this.emit('compilation-error', compilationError);
             }
@@ -203,10 +200,3 @@ module.exports = function(options, wp, done){
     return through2.obj(pipeBuffer);
 
 };
-
-// Expose webpack if asked
-Object.defineProperty(module.exports, 'webpack', {
-    get: function(){
-        return require('webpack');
-    }
-});
