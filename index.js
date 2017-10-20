@@ -8,7 +8,6 @@ const gutil            = require('gulp-util');
 const nodePath         = require('path');
 const nodeFS           = require('fs');
 const mkdirp           = require('mkdirp');
-const File             = require('vinyl');
 const extend           = require('extend');
 const MemoryFileSystem = require('memory-fs');
 const through2         = require('through2');
@@ -40,41 +39,32 @@ module.exports = function(options, wp, done){
     let progress = options.progress;
     delete options.progress;
 
-    let config      = options.config || options;
-    let callingDone = false;
+    let config = options.config || options;
+    let statsOptions = (options && options.stats) || {};
+    let webpack = wp || require('webpack');
 
     done = typeof done === 'function' ? done : doneCallback;
-
-    let webpack = wp || require('webpack');
-    let cfs     = [];
 
     function doneCallback(err, stats){
         if(err) return;
         stats = stats || {};
-        if(options.quiet || callingDone){
+        if(!statsOptions){
             return;
         }
+        if('string' === typeof statsOptions){
 
-        if(options.watch){
-            callingDone = true;
-            setTimeout(function(){
-                callingDone = false;
-            }, 500);
+            return 'none' !== statsOptions && gutil.log(stats.toString());
         }
-
-        if(options.verbose){
+        if(statsOptions.verbose){
             gutil.log(stats.toString({
                 colors: gutil.colors.supportsColor
             }));
         }else{
-            let statsOptions = (options && options.stats) || {};
-
-            Object.keys(defaultStatsOptions).forEach(function(key){
+            Object.keys(defaultStatsOptions).forEach(key =>{
                 if(typeof statsOptions[key] === 'undefined'){
                     statsOptions[key] = defaultStatsOptions[key];
                 }
             });
-
             gutil.log(stats.toString(statsOptions));
         }
     }
@@ -127,11 +117,6 @@ module.exports = function(options, wp, done){
                 this.emit('error', new gutil.PluginError('webpack-stream', err));
                 return;
             }
-
-            if(err){
-                this.emit('error', new gutil.PluginError('webpack-stream', err));
-                return;
-            }
             let jsonStats = stats ? stats.toJson() || {} : {};
             let errors    = jsonStats.errors || [];
             if(errors.length){
@@ -175,8 +160,7 @@ module.exports = function(options, wp, done){
                         this.push(file);
                         next();
                     }else{
-                        // file = recombineNewFile(file, fs, wpc, outname);
-                        let existsAt = compilation.assets[outname].existsAt;
+                        let existsAt     = compilation.assets[outname].existsAt;
                         let existsAtPath = nodePath.dirname(existsAt);
                         if(!nodeFS.existsSync(existsAtPath)){
                             mkdirp.sync(existsAtPath);
@@ -214,23 +198,6 @@ module.exports = function(options, wp, done){
         file.path     = nodePath.format(fileInfo);
 
         return file;
-    }
-
-    function recombineNewFile(file, fs, wpc, outname){
-
-        let fileInfo = nodePath.parse(file.path);
-        let path     = fs.join(wpc.outputPath, outname);
-        if(path.indexOf('?') !== -1){
-            path = path.split('?')[0];
-        }
-        fileInfo.base = outname;
-        fileInfo.name = outname.replace('.' + fileInfo.ext, '');
-
-        return new File({
-            base: file.base,
-            path: nodePath.format(fileInfo),
-            contents: fs.readFileSync(path)
-        });
     }
 
     return through2.obj(pipeBuffer);

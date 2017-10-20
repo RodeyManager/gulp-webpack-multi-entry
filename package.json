@@ -1,6 +1,6 @@
 {
   "name": "gulp-webpack-multi-entry",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "基于gulp的webpack多入口文件",
   "keyword": "javascript, nodejs, gulp, webpack",
   "author": {
@@ -54,6 +54,7 @@
     "babel-runtime": "^6.26.0",
     "gulp": "^3.9.1",
     "gulp-jsminer": "^1.0.2",
+    "gulp-recache": "^1.0.5",
     "moment": "^2.19.1",
     "uglifyjs-webpack-plugin": "^1.0.0-beta.3"
   }

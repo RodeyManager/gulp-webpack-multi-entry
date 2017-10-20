@@ -7,10 +7,11 @@ const webpack = require('webpack');
 
 module.exports = {
     output: {
-        path: path.resolve(__dirname, './build/bt'),
+        path: path.resolve(__dirname, './build/js'),
         filename: '[name].js'
     },
-    devtool: "source-map",
+    devtool: 'source-map',
+    // stats: 'none',
 
     module: {
         rules: [
@@ -30,7 +31,7 @@ module.exports = {
                 }
             }
         ]
-    }/*,
+    },
     plugins: [
         new webpack.optimize.UglifyJsPlugin({
             compress: {
@@ -38,5 +39,5 @@ module.exports = {
                 drop_console: false
             }
         })
-    ]*/
+    ]
 };
