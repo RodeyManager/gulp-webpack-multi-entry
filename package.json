@@ -1,6 +1,6 @@
 {
   "name": "gulp-webpack-multi-entry",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "基于gulp的webpack多入口文件",
   "keyword": "javascript, nodejs, gulp, webpack",
   "author": {
