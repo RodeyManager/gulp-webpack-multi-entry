@@ -1,6 +1,6 @@
 {
   "name": "gulp-webpack-multi-entry",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "基于gulp的webpack多入口文件",
   "keyword": "javascript, nodejs, gulp, webpack",
   "author": {
@@ -17,7 +17,9 @@
     "url": "git+https://github.com/RodeyManager/gulp-webpack-multi-entry.git"
   },
   "homepage": "https://github.com/RodeyManager/gulp-webpack-multi-entry.git#readme",
-  "files": [],
+  "files": [
+      "index.js"
+  ],
   "dependencies": {
     "extend": "^3.0.1",
     "gulp-util": "^3.0.8",

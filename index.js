@@ -82,16 +82,6 @@ module.exports = function (options, wp, done) {
             let cwd = nodePath.resolve(process.cwd());
             let basePath = nodePath.resolve(cwd, config.output.path);
             cf.entry = file.path;
-            // if (entry) {
-
-            //     if (util.isObject(entry)) {
-            //         let tempEntry = {};
-            //         tempEntry[fileInfo.name] = file.path
-            //         cf.entry = extend(true, tempEntry, entry);
-            //     } else {
-            //         this.emit('error', new gutil.PluginError('entry is must be Object ( {} )', err));
-            //     }
-            // }
             cf.output.path = nodePath.dirname(nodePath.resolve(basePath, file.relative));
             return compilerStream.apply(this, [file, next, cf]);
         }
